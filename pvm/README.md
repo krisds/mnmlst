@@ -2,5 +2,5 @@
 
 This is a highly simplified and minimalist version of a Process Virtual Machine, as you'd find them in [JBPM](http://docs.jboss.com/jbpm/pvm/article/) and [Activiti](http://www.activiti.org/components.html). It has no persistence, wait states, parallel paths, etc. (yet), but it does show what the core of such a system could look like.
 
-You'll need [requirejs](http://requirejs.org/docs/node.html) to run.
+Built for [Node.js](http://nodejs.org/). You'll also need [requirejs](http://requirejs.org/docs/node.html) to run.
 

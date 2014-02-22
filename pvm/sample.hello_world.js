@@ -4,16 +4,19 @@
 // this is probably the simplest process definition anyone can set up.
 
 var requirejs = require('requirejs')
-requirejs(['pvm'], function(pvm){
+requirejs(['pvm'], function(pvm) {
 
   var hello_world = new pvm.ProcessDefinition()
 
-  // There is only a single task, and it prints out that well known message.
+  // There is only a single task, and it prints out a greeting. If no name was
+  // provided we default to that well know message.
   hello_world.task('start', function() {
-    console.log('Hello world')
+    console.log('Hello ' + (this.name ? this.name : 'world') + '.')
   })
 
   hello_world.activate()
+  hello_world.activate({ name: 'Once-ler' })
+  hello_world.activate({ name: 'Lorax' })
 })
 
 

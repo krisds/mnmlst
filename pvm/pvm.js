@@ -1,7 +1,5 @@
 // # A Minimalist Process Virtual Machine
 //
-// By KrisDS, [if false panic](http://if-false-panic.blogspot.be/).
-//
 
 define([], function () {
 
@@ -69,53 +67,17 @@ define([], function () {
   // the current task being executed. It also collects state which is shared by
   // all tasks in the process.
   //
+  // The caller may specify the initial state of the process explicitly. This
+  // allows bringing in parameters from the outside.
+  //
   // There is a convention here that the initial task to execute is named
   // 'start'. But this can be overridden by specifying the start state as an
   // argument. This also allows us to model process which can have many
   // different starting points.
-  function Process(process_definition, task) {
+  function Process(process_definition, initial_state, initial_task) {
     this.process = process_definition
-    this.task = process_definition.tasks[task || 'start']
-    this.state = {}
-  }
-
-  // Processes are executed one task at a time. We're basically 'stepping'
-  // through the process definition.
-  Process.prototype.step = function() {
-    // Every step starts by executing the current task.
-    this.task.execute(this)
-
-    // Once that's done we look for the right transition to take. As seen
-    // earlier transitions are functions which may return the name of the next
-    // state. The first name we get will be used to retrieve the next state in
-    // the process definition.
-    for (var i = 0; i < this.task.transitions.length; i++) {
-      // (Note that the transition logic will see its 'this' as being bound to
-      // execution state. This will be true as well for the task logic, and can
-      // make for some leaner process definitions.)
-      var result = this.task.transitions[i].call(this.state)
-      if (result != undefined && result != null) {
-        this.task = this.process.tasks[result]
-        return
-      }
-    }
-
-    // If no transition is found to match then we nullify the task, which
-    // basically ends the process.
-    this.task = null
-  }
-
-  // So, indeed, a process is considered 'done' when there is no more task to
-  // be executed.
-  Process.prototype.is_done = function() {
-    return this.task == null
-  }
-
-  // Executing a specific task boils down to invoking the registered function.
-  // As we do so we tell it to use the current execution state as 'this'. This
-  // allows for some more concise task logic.
-  Task.prototype.execute = function(exec) {
-    if (this.fn) this.fn.call(exec.state)
+    this.state = initial_state || {}
+    this.task = process_definition.tasks[initial_task || 'start']
   }
 
   // So now we come down to the overall execution logic. The engine needs to
@@ -123,23 +85,62 @@ define([], function () {
   // they will get run by the main loop.
   var processes = []
 
-  // We're setting this process engine up to be run in a Node.js environment.
-  // Node.js processing is handled by registering a function to get called on
-  // the "next tick". On each tick the following function will step one
-  // process. At the end it will reregister itself to get triggered again on
-  // the next tick. The end result is that we will be stepping through all
-  // processes one tick at a time.
+  // We're setting this process engine up to be run in a Node.js environment,
+  // and we want to play nice with its asynchronous processing support.
+  //
+  // One way of doing so is to register a function to get called on the "next
+  // tick". This option, however, has the disadvantage of running the method 
+  // before doing any IO. If we're doing lots of workflow steps this will have 
+  // the effect of starving the IO...
+  //
+  // The alternative is to make use of 'setImmediate'. Despite its name this
+  // will trigger the function only after all other tick handlers and IO. While
+  // that means the workflow engine itself won't run as fast as it could, it
+  // does give other processes, possibly triggered by tasks, a chance of
+  // running.
+  //
+  // So that's what the following function does. On each run it steps a single
+  // process. Then, if there is more work left to be done, it reschedules
+  // itself through 'setImmediate'.
   function tick() {
-    // We step the first process in the queue.
+    // We fetch the first process and task from the queue.
     var p = processes.shift()
-    p.step()
+    var task = p.task
 
-    // If the process is not done yet we'll push it back onto the queue.
-    if (!p.is_done()) processes.push(p)
+    // Every step starts by executing the current task. Executing a task boils
+    // down to invoking the registered function. As we do so we tell it to use
+    // the current process state as 'this'. This allows for some more concise
+    // task logic.
+    if (task.fn) task.fn.call(p.state)
+
+    // Once that's done we look for the right transition to take. As seen
+    // earlier, transitions are functions which may return the name of the next
+    // state. The first name we get will be used to retrieve the next state in
+    // the process definition.
+    var next_task = null
+    for (var i = 0; i < task.transitions.length; i++) {
+      // (Note that the transition logic will see its 'this' as being bound to
+      // execution state. This will be true as well for the task logic, and can
+      // make for some leaner process definitions.)
+      var result = task.transitions[i].call(p.state)
+      if (result != undefined && result != null) {
+        next_task = p.process.tasks[result]
+        break
+      }
+    }
+
+    // We then assign the next task to the process. Not that this may be a
+    // 'null' value.
+    p.task = next_task
+
+    // If it is a 'null' value we have basically concluded that the process is
+    // done. If it's not 'null' then there still is more work to do, in which
+    // case we re-enqueue it on our list of processes.
+    if (p.task != null) processes.push(p)
 
     // If there are more processes awaiting execution we schedule another run
     // of our executor.
-    if (!processes.length == 0) process.nextTick(tick)
+    if (!processes.length == 0) setImmediate(tick)
   }
 
   // With all of the machinery in place we still need a way to start things up.
@@ -150,9 +151,9 @@ define([], function () {
   // adds it to the list of processes. In addition, if the process engine is
   // not running (i.e. we did not shedule it yet for execution on the next
   // tick) then we get it started now (by scheduling it, of course).
-  ProcessDefinition.prototype.activate = function(initial_task) {
+  ProcessDefinition.prototype.activate = function(initial_state, initial_task) {
     if (processes.length == 0) process.nextTick(tick)
-    processes.push(new Process(this, initial_task))
+    processes.push(new Process(this, initial_state, initial_task))
   }
 
   // And that's all there's to it!
