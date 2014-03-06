@@ -67,7 +67,9 @@ define(['q'], function (Q) {
   // The runtime state of a running process definition gets modeled in a
   // process. A running process keeps a link to its process definition, and to
   // the current task being executed. It also collects state which is shared by
-  // all tasks in the process.
+  // all tasks in the process. Finally, as a helper for asynchronicity we also
+  // keep hold of a Q deferred promise, which is made available to the client
+  // upon activation of the process.
   //
   // The caller may specify the initial state of the process explicitly. This
   // allows bringing in parameters from the outside.
@@ -80,6 +82,7 @@ define(['q'], function (Q) {
     this.process = process_definition
     this.state = initial_state || {}
     this.task = process_definition.tasks[initial_task || 'start']
+    this.deferred = Q.defer()
   }
 
   // So now we come down to the overall execution logic. The engine needs to
@@ -148,6 +151,10 @@ define(['q'], function (Q) {
           processes.push(p)
           setImmediate(tick)
 
+          // One nice thing of Q's promises (and deferreds) is that we can
+          // notify the client of progress. So as kind of service to the client
+          // we notify him of the result of each transition.
+	      p.deferred.notify(p.task.id)
           return
         }
       }
@@ -155,6 +162,10 @@ define(['q'], function (Q) {
       // If no transition is found to match then we nullify the task, which
       // basically ends the process.
       p.task = null
+      // We now also resolve our promise of completing the process. This allows
+      // clients to coordinate other behaviour with respect to process
+      // completion.
+      p.deferred.resolve()
     })
 
     // If there are more processes awaiting execution we schedule another run
@@ -170,9 +181,15 @@ define(['q'], function (Q) {
   // adds it to the list of processes. In addition, if the process engine is
   // not running (i.e. we did not shedule it yet for execution on the next
   // tick) then we get it started now (by scheduling it, of course).
+  //
+  // As said before, we also share the promise of completing the process with
+  // the caller.
   ProcessDefinition.prototype.activate = function(initial_value, initial_task) {
     if (processes.length == 0) process.nextTick(tick)
-    processes.push(new Process(this, initial_value, initial_task))
+    
+    var p = new Process(this, initial_value, initial_task)
+    processes.push(p)
+    return p.deferred.promise
   }
 
   // And that's all there's to it!
