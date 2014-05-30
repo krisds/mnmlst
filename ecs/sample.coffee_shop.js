@@ -167,7 +167,7 @@ requirejs(['ecs'], function(ecs) {
 	ecs.for_each([Named, InQueue], function(entity) {
 	  var queueing = entity.get(InQueue)
       console.log('Sorry, ' + entity.get(Named).name + ', we\'re closing.')
-	  entity.remove(InQueue).add(new WaitingOnOrder())
+	  entity.remove(InQueue)
 	})
   }
 
@@ -213,7 +213,8 @@ requirejs(['ecs'], function(ecs) {
   }
 
   console.log('*** Time to close up shop. ***')
-  while (current_time.getTime() < end_time.getTime()) {
+  while (current_time.getTime() < end_time.getTime()
+         || ecs.count([WaitingOnOrder]) > 0) {
 	closing(current_time)
 	current_time.setMinutes(current_time.getMinutes() + 15)
   }
@@ -221,11 +222,24 @@ requirejs(['ecs'], function(ecs) {
   // At the end of the simulation we'll print out statistics on our staff.
 
   console.log('Let\'s see how our staff did.')
+  var coffees_sold = 0
+  var coffees_served = 0
+
   cashiers.concat(baristas).forEach(function(barista) {
+	var sold = barista.get(Selling).customers_served
+	var served = barista.get(Serving).customers_served
+	
     console.log(barista.get(Named).name + ':')
-    console.log(' - sold ' + barista.get(Selling).customers_served + ' coffee(s).')
-    console.log(' - served ' + barista.get(Serving).customers_served + ' customer(s).')
+    console.log(' - sold ' + sold + ' coffee(s).')
+    console.log(' - served ' + served + ' customer(s).')
+
+	coffees_sold += sold
+	coffees_served += served
   })
+
+  console.log(
+	'So that\'s a total of ' + coffees_sold + ' coffees sold,'
+ 	+ ' and ' + coffees_served + ' coffees served.')
 
   // And that's it. Sorry about the silly example. It was just intended to show
   // of how you could make use of an Entity/Component System. I'm always open
