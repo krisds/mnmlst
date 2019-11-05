@@ -2,37 +2,10 @@
 //
 // This example applies parser combinators to define parsers for datetimes.
 
-var requirejs = require('requirejs')
+const assert = require('assert')
+const requirejs = require('requirejs')
 requirejs(['prsly'], function(_) {
 
-  // Our inputs will be strings, so the first thing we need is to ability for
-  // streams to use them. To that end we set up a generator function which will
-  // return each character of the given string in turn.
-  function from_string(string) {
-    var position = 0
-    return function() {
-      if (position < string.length) return string.charAt(position++)
-      else return null
-    }
-  }
-
-  // The following extends strings with a function which makes testing them
-  // against a given parser easy and readable.
-  String.prototype.is_a_valid = function(parser) {
-    var result = parser(new _.Stream(from_string(this)))
-    if (result == null || result.tail() != null)
-      console.log('[FAIL] ' + this)
-  }
-
-  // And one for the negative test:
-  String.prototype.is_not_a_valid = function(parser) {
-    var result = parser(new _.Stream(from_string(this)))
-    if (result != null && result.tail() == null)
-      console.log('[FAIL] ' + this)
-  }
-
-  // But that's enough setup, let's get to the actual parsing.
-  //
   // Given that we're parsing strings the basic units which we'll need to be
   // able to match are individual characters. The following function generates 
   // such single character parsers.
@@ -55,25 +28,24 @@ requirejs(['prsly'], function(_) {
   //
   // So each of these characters are digits:
   '0123456789'.split('').forEach(function(character) {
-    character.is_a_valid(digit)
+    _.assert_that(character).is_a_valid(digit)
   })
 
   // Which is not true for any of these.
   'abcdefghijklmnopqrstuvwxyz'.split('').forEach(function(character) {
-    character.is_not_a_valid(digit)
+    _.assert_that(character).is_not_a_valid(digit)
   })
 
   // Next, we'll define whitespace as a sequence of one or more spaces.
-  var whitespace = _.sequence(c(' '), _.many(c(' ')))
+  var whitespace = _.sequence(c(' '), _.many(c(' '))).as(_.ignored_value)
+  
+  _.assert_that(' '      ).is_a_valid(whitespace)
+  _.assert_that('    '   ).is_a_valid(whitespace)
+  _.assert_that('       ').is_a_valid(whitespace)
 
-  ' '.is_a_valid(whitespace)
-  '    '.is_a_valid(whitespace)
-  '       '.is_a_valid(whitespace)
-  ' '.is_a_valid(whitespace)
-
-  ''.is_not_a_valid(whitespace)
-  '\t'.is_not_a_valid(whitespace)
-  '  x  '.is_not_a_valid(whitespace)
+  _.assert_that(''     ).is_not_a_valid(whitespace)
+  _.assert_that('\t'   ).is_not_a_valid(whitespace)
+  _.assert_that('  x  ').is_not_a_valid(whitespace)
 
   // The following generates parsers to match a given string (or 'literal') 
   // exactly. It does this by creating a parser for each character in the 
@@ -84,55 +56,86 @@ requirejs(['prsly'], function(_) {
     )
   }
 
-  // We'll use that to define a parser which accepts all names of the months.
+  // We'll use that to define a parser which accepts all names of the months
+  // and returns their ordinal value.
   var month = _.choice(
-    l('January'), 
-    l('February'), 
-    l('March'), 
-    l('April'), 
-    l('May'), 
-    l('June'), 
-    l('July'), 
-    l('August'), 
-    l('September'), 
-    l('October'), 
-    l('November'), 
-    l('December')
+    l('January'  ).as(_.constant_value( 1)), 
+    l('February' ).as(_.constant_value( 2)), 
+    l('March'    ).as(_.constant_value( 3)), 
+    l('April'    ).as(_.constant_value( 4)), 
+    l('May'      ).as(_.constant_value( 5)), 
+    l('June'     ).as(_.constant_value( 6)), 
+    l('July'     ).as(_.constant_value( 7)), 
+    l('August'   ).as(_.constant_value( 8)), 
+    l('September').as(_.constant_value( 9)), 
+    l('October'  ).as(_.constant_value(10)), 
+    l('November' ).as(_.constant_value(11)), 
+    l('December' ).as(_.constant_value(12))
   )
 
-  'January'.is_a_valid(month)
-  'June'.is_a_valid(month)
-  'Octember'.is_not_a_valid(month)
+  _.assert_that('January' ).is_a_valid(month).with_value(_.equal_to(1))
+  _.assert_that('June'    ).is_a_valid(month).with_value(_.equal_to(6))
+  _.assert_that('Octember').is_not_a_valid(month)
 
   // A day is one to two digits long.
-  var day = _.sequence(digit, _.optional(digit))
+  var day = _.sequence(digit, _.optional(digit)).as(_.int_value)
 
   // A year is four digits.
-  var year = _.sequence(digit, digit, digit, digit)
+  var year = _.sequence(digit, digit, digit, digit).as(_.int_value)
 
   // A date is a sequence of month, day and year, with some separators.    
-  var date = _.sequence(month, whitespace, day, c(','), whitespace, year)
-
-  'January 1, 2014'.is_a_valid(date)
-  'August 17, 2014'.is_a_valid(date)
-  '12-12-2012'.is_not_a_valid(date)
-
-  // Hours, minutes and seconds consist of two digits each:
-  var hour = _.sequence(digit, digit)
-  var minutes = _.sequence(digit, digit)
-  var seconds = _.sequence(digit, digit)
-
-  // Hours, minutes and seconds are separated by colons. Seconds are optional.
-  var time = _.sequence(
-    hour, c(':'), minutes, _.optional(_.sequence(c(':'), seconds))
+  let comma = c(',').as(_.ignored_value)
+  var date = _.sequence(month, whitespace, day, comma, whitespace, year).as(
+    ([month, day, year]) => { return {
+      day: day,
+      month: month,
+      year: year
+    }}
   )
 
-  '12:12'.is_a_valid(time)
-  '12:12:12'.is_a_valid(time)
-  '12h12'.is_not_a_valid(time)
+  _.assert_that('January 1, 2014').is_a_valid(date).with_value(d => {
+    assert(d.day == 1 && d.month == 1 && d.year == 2014)
+  })
+  _.assert_that('August 17, 2014').is_a_valid(date).with_value(d => {
+    assert(d.day == 17 && d.month == 8 && d.year == 2014)
+  })
+  _.assert_that('12-12-2012'     ).is_not_a_valid(date)
+
+  // Hours, minutes and seconds consist of two digits each:
+  var hour    = _.sequence(digit, digit).as(_.int_value)
+  var minutes = _.sequence(digit, digit).as(_.int_value)
+  var seconds = _.sequence(digit, digit).as(_.int_value)
+
+  // Hours, minutes and seconds are separated by colons. Seconds are optional.
+  let colon = c(':').as(_.ignored_value)
+  var time = _.sequence(
+    hour, colon, minutes, _.optional(_.sequence(colon, seconds).as(_.first_value))
+  ).as(
+    ([hours, minutes, seconds]) => { return {
+      hours: hours,
+      minutes: minutes,
+      seconds: seconds
+    }}
+  )
+
+  _.assert_that('12:12'   ).is_a_valid(time).with_value(t => {
+    assert(t.hours == 12 && t.minutes == 12 && t.seconds == undefined)
+  })
+  _.assert_that('12:12:12').is_a_valid(time).with_value(t => {
+    assert(t.hours == 12 && t.minutes == 12 && t.seconds == 12)
+  })
+  _.assert_that('12h12'   ).is_not_a_valid(time)
 
   // And finally we compose dates and times into the full datetime notation:
   var date_time = _.sequence(date, whitespace, time)
 
-  'August 17, 2014 12:12:12'.is_a_valid(date_time)
+  // Now for the real test: let's give our parser a datetime, make sure it
+  // accepts it, and display the value being returned.
+  _.assert_that('August 17, 2014 12:12:12')
+    .is_a_valid(date_time)
+    .with_value(([d, t]) => {
+      console.log('date time: ', [d, t])
+      assert(d.day == 17 && d.month == 8 && d.year == 2014)
+      assert(t.hours == 12 && t.minutes == 12 && t.seconds == 12)
+    })
 })
