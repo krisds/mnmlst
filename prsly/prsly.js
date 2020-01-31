@@ -237,7 +237,7 @@ define([], function () {
   
   // Now, the following isn't really necessary, but I want something more
   // readable than e.g. ``as(match(date_time), to_date_time_value)``. I would
-  // prefer a (fluent interface)[https://en.wikipedia.org/wiki/Fluent_interface]
+  // prefer a [fluent interface](https://en.wikipedia.org/wiki/Fluent_interface)
   // and instead write ``date_time.as(date_time_value)``. To that end we will
   // create a function which takes a parser function and wraps it as needed.
   function as_fluent_parser(parser) {
@@ -421,6 +421,52 @@ define([], function () {
   }
   // --------------------------------------------------------------------------
 
+  // ### Skipping parts of the stream while matching
+  //
+  // It might be an odd idea to want a parser to ignore parts of some input,
+  // but it proves to be a useful thing at times. Maybe you're only interested
+  // in certain elements of your input. Maybe you don't have a good handle on
+  // the structure of parts of the input and still want to get going with the
+  // parts you do know. Maybe developing a complete parser is just too 
+  // expensive or unneccessary. Maybe you're into [island grammars](https://en.wikipedia.org/wiki/Island_grammar).
+  // Whatever the reason, skipping may be exactly what you need.
+  //
+  // So here is a parser which will scan the stream and skip anything up to a
+  // predefined point. How do we define that place ? By writing a parser for
+  // it, of course !
+  function skip_to(parser) {
+    return as_fluent_parser(stream => {
+      let skipped = []
+      let [next, value] = parser(stream)
+      
+      while (next == NO_MATCH) {
+        skipped.push(stream.head())
+        stream = stream.tail()
+        if (stream == null) break;
+        [next, value] = parser(stream)
+      }
+      
+      return [stream, skipped.length > 0 ? skipped : NO_VALUE]
+    })
+  }
+  
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    let is_a = is(a => a == 'a')
+    let skip_to_a = sequence(skip_to(is_a), is_a)
+
+    assert_that('a'    ).is_a_valid(skip_to_a).with_value(equal_to('a'))
+    assert_that('+a'   ).is_a_valid(skip_to_a).with_value(equal_to([['+'], 'a']))
+    assert_that('+%$#a').is_a_valid(skip_to_a).with_value(equal_to([['+', '%', '$', '#'], 'a']))
+
+    assert_that(''     ).is_not_a_valid(skip_to_a)
+    assert_that('b'    ).is_not_a_valid(skip_to_a)
+    assert_that('bcdef').is_not_a_valid(skip_to_a)
+  }
+  // --------------------------------------------------------------------------
+
   // ## Mapping values
   //
   // At this point we have all the pieces to construct useful parsers, and we
@@ -463,6 +509,7 @@ define([], function () {
     many: many,
     choice: choice,
     optional: optional,
+    skip_to: skip_to,
     
     constant_value: constant_value,
     joined_value: joined_value,
