@@ -166,11 +166,26 @@ define([], function () {
   // quick assertions of input strings versus parsers.
   function assert_that(input) {
     return {
+      // This version is for the simplest assertion: that the given parser
+      // should return a match on the input.
+      matches: parser => {
+        let [stream, value] = parser(new Stream(from_string(input)))
+        assert(stream != NO_MATCH)
+        return { with_value: (f) => f(value) }
+      },
+      // This assertion is stronger: the given parser should match **all** of
+      // the input.
       is_a_valid: parser => {
         let [stream, value] = parser(new Stream(from_string(input)))
         assert(stream != NO_MATCH && stream.head() == null)
         return { with_value: (f) => f(value) }
       },
+      // This asserts the inverse: that a given parser will not match.
+      does_not_match: parser => {
+        let [stream, value] = parser(new Stream(from_string(input)))
+        assert(stream == NO_MATCH)
+      },
+      // And again a stronger version which disallows partial matches.
       is_not_a_valid: parser => {
         let [stream, value] = parser(new Stream(from_string(input)))
         assert(stream == NO_MATCH || stream.head() != null)
@@ -199,7 +214,16 @@ define([], function () {
   {
     // This should match a single character 'a', and return that character.
     let letter_a = match(a => a == 'a')
+    
+    // Does this parser match a valid input ?
+    assert_that('a'  ).matches(letter_a).with_value(equal_to('a'))
+    // Does it match the input in full ?
     assert_that('a'  ).is_a_valid(letter_a).with_value(equal_to('a'))
+
+    // Let's make the difference entirely clear: this first assertion shows
+    // that a parser need not match the full input.
+    assert_that('aaa').matches(letter_a).with_value(equal_to('a'))
+
     assert_that('b'  ).is_not_a_valid(letter_a)
     assert_that('abc').is_not_a_valid(letter_a)
   }
@@ -421,6 +445,32 @@ define([], function () {
   }
   // --------------------------------------------------------------------------
 
+  // ### Matching the end of an input
+  //
+  // So far our tests have made sure we're always matching the full input. But
+  // we can just as easily set up a parser which does this for us.
+  let at_end = as_fluent_parser(stream => {
+    if (stream.head() == null)
+      return [stream, NO_VALUE]
+    else
+      return [NO_MATCH, NO_VALUE]
+  })
+  
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    let letter_e = is(e => e == 'e')
+    let final_e = sequence(letter_e, at_end)
+   
+    assert_that('e'    ).matches(letter_e).with_value(equal_to('e'))
+    assert_that('earth').matches(letter_e).with_value(equal_to('e'))
+
+    assert_that('e'    ).matches(final_e).with_value(equal_to('e'))
+    assert_that('earth').does_not_match(final_e)
+  }
+  // --------------------------------------------------------------------------
+
   // ### Skipping parts of the stream while matching
   //
   // It might be an odd idea to want a parser to ignore parts of some input,
@@ -505,10 +555,13 @@ define([], function () {
     NO_MATCH: NO_MATCH,
     NO_VALUE: NO_VALUE,
     is: is,
+    any: any,
+    none: none,
     sequence: sequence,
     many: many,
     choice: choice,
     optional: optional,
+    at_end: at_end,
     skip_to: skip_to,
     
     constant_value: constant_value,
