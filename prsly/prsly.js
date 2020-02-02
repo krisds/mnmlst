@@ -534,6 +534,12 @@ define([], function () {
   // Or none at all:
   function ignored_value(x) { return undefined }
 
+  // More complex parses might yield arrays of arrays, which we may want
+  // flattened.
+  function flattened_value(xs) { 
+    return xs.reduce((acc, val) => acc.concat(val), [])
+  }
+
   // We might want to combine different value functions. This function lets you
   // pipe a value through a series of them:
   function piped(...fns) {
@@ -569,6 +575,8 @@ define([], function () {
     ignored_value: ignored_value,
     first_value: first_value,
     int_value: int_value,
+    flattened_value: flattened_value,
+    piped: piped,
     
     assert_that: assert_that,
     equal_to: equal_to
