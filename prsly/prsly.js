@@ -471,6 +471,60 @@ define([], function () {
   }
   // --------------------------------------------------------------------------
 
+  // ### Recursive parsing
+  //
+  // So far the parsers we have defined were either stand-alone (e.g. `is`,
+  // `any`, `at_end`) or built-up from other parsers (e.g. `optional`,
+  // `choice`). But what if a parser needs to reference itself ?
+  //
+  // Let's take the task of having to parse strings of nested parentheses. So
+  // we want to match an open parenthesis, then possibly many other nested
+  // parentheses, and finally a closing parenthesis. Basically something like:
+  //
+  // ```nested = sequence( '(', many(nested), ')' )```
+  //
+  // As you can see, the parser would like to reference itself. But that is
+  // currently not possible until that parser has been built...
+  //
+  // The solution is to allow declaring a parser before fully defining it. That
+  // is what the following function allows. It will return a parser whose
+  // internals can be defined in a later step.
+  function to_be_defined() {
+    let parser = none
+    
+    let fluent = as_fluent_parser(stream => parser(stream))
+    
+    fluent.define = function(actual_parser) {
+      parser = actual_parser
+      return fluent
+    }
+    
+    return fluent
+  }
+  
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  // So, now that we can, let's define a parser for nested parentheses.
+  {
+    let parens = to_be_defined()
+    let open   = is(c => c == '(')
+    let close  = is(c => c == ')')
+    parens.define(sequence(open, many(parens), close))
+    
+    assert_that('('     ).is_a_valid(open)
+    assert_that(')'     ).is_a_valid(close)
+    assert_that('()'    ).is_a_valid(parens)
+    assert_that('(())'  ).is_a_valid(parens)
+    assert_that('(()())').is_a_valid(parens)
+
+    assert_that('('     ).is_not_a_valid(parens)
+    assert_that(')'     ).is_not_a_valid(parens)
+    assert_that('(()'   ).is_not_a_valid(parens)
+    assert_that('(()))' ).is_not_a_valid(parens)
+  }
+  // --------------------------------------------------------------------------
+
   // ### Skipping parts of the stream while matching
   //
   // It might be an odd idea to want a parser to ignore parts of some input,
@@ -568,6 +622,7 @@ define([], function () {
     choice: choice,
     optional: optional,
     at_end: at_end,
+    to_be_defined: to_be_defined,
     skip_to: skip_to,
     
     constant_value: constant_value,
