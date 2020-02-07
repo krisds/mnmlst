@@ -96,7 +96,7 @@ define([], function () {
   // The following generator function will return each character of a given
   // string in turn.
   function from_string(string) {
-    var position = 0
+    let position = 0
     return function() {
       if (position < string.length) return string.charAt(position++)
       else return null
@@ -121,6 +121,32 @@ define([], function () {
     // the stream from there. So we can go back to the first value (or any
     // other) whenever we want.
     assert(abc.head() === 'a')
+  }
+  // --------------------------------------------------------------------------
+
+  // ### Streams backed by lists
+  //
+  // While parsing text is the common case, really any stream can become a valid
+  // input. Do you have a list of data from which you want to extract some
+  // structure ? Then turn that list into a stream:
+  function from_list(list) {
+    let position = 0
+    return function() {
+      if (position < list.length) return list[position++]
+      else return null
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    let data_stream = new Stream(from_list([ 1, 'two', { a: 3 } ]))
+    assert(data_stream.head() === 1)
+    assert(data_stream.tail().head() === 'two')
+    assert(data_stream.tail().tail().head().a === 3)
+    assert(data_stream.tail().tail().tail().head() == null)
+    assert(data_stream.head() === 1)
   }
   // --------------------------------------------------------------------------
 
@@ -570,6 +596,90 @@ define([], function () {
     assert_that('bcdef').is_not_a_valid(skip_to_a)
   }
   // --------------------------------------------------------------------------
+  
+  // ### Out-of-sequence parsing
+  //
+  // Up to this point we have tried to parse everything in one go; starting at
+  // the beginning and moving step by step towards the end of the stream. 
+  // Sometimes, however, it can be useful to return to return to something in a
+  // later step.
+  //
+  // The example here will try to parse something enclosed between two markers,
+  // but it will __first__ look for the markers and __only then__ try to match
+  // what was found in between.
+  // 
+  // Why would you want to do such a thing. Well, scanning for the end marker
+  // first may simplify the parser for the intermediate part. Say, for example,
+  // that the end marker is two consecutive square brackets (i.e. ']]'), but
+  // that single square brackets may still appear before that. Setting that up
+  // in-sequence would require catching these cases, and maybe using some form
+  // of negation to make sure we don't accidentally consume the end marker in
+  // error. By looking for the end marker first we can ignore that complexity
+  // by making sure that case won't even show up.
+  function enclosed(opening, inner, closing) {
+    // We will be using skipping to fast-forward to the closing marker.
+    let skip_to_closing = skip_to(closing)
+    
+    return as_fluent_parser(stream => {
+      // Start by matching the opening.
+      let [stream_after_opening, value_from_opening] = opening(stream)
+      if (stream_after_opening == NO_MATCH) return [NO_MATCH, NO_VALUE]
+
+      // Then skip to the end.
+      let [stream_up_to_closing, skipped] = skip_to_closing(stream_after_opening)
+      if (stream_up_to_closing == NO_MATCH) return [NO_MATCH, NO_VALUE]
+
+      // Now, skipping returns a list of all values which were skipped.
+      // We'll be turning those into a stream and then use that as the source
+      // for the inner parser.
+      let [stream_after_inner, value_from_inner] = inner(new Stream(from_list(skipped || [])))
+      // Here we say that we expect the inner parser to match __all__ of the
+      // skipped values.
+      if (stream_after_inner == NO_MATCH || stream_after_inner.head() != null) return [NO_MATCH, NO_VALUE]
+
+      // Finally, we match the closing marker.
+      let [stream_after_closing, value_from_closing] = closing(stream_up_to_closing)
+      
+      // And then build and return a value of our own.
+      let values = []
+      if (value_from_opening != NO_VALUE) values.push(value_from_opening)
+      if (value_from_inner != NO_VALUE) values.push(value_from_inner)
+      if (value_from_closing != NO_VALUE) values.push(value_from_closing)
+      return [stream_after_closing, values]
+    })
+  }
+  
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    let open  = sequence(is(c => c == '['), is(c => c == '['))
+    let close = sequence(is(c => c == ']'), is(c => c == ']'))
+    let inner = many(any)
+    let box = enclosed(open, inner, close)
+    
+    assert_that('[[]]'   )
+      .is_a_valid(box)
+      .with_value(equal_to([['[', '['], [], [']', ']']]))
+    
+    assert_that('[[***]]')
+      .is_a_valid(box)
+      .with_value(equal_to([['[', '['], ['*', '*', '*'], [']', ']']]))
+    
+    // Here is the case we mentioned before. Single instances of a closing
+    // square bracket are allowed before between the open and close marker.
+    assert_that('[[^][^]]')
+      .is_a_valid(box)
+      .with_value(equal_to([['[', '['], ['^', ']', '[', '^'], [']', ']']]))
+
+    // A sequence of two (or more) square brackets, however, is not.
+    assert_that('[[++]]+]]').is_not_a_valid(box)
+    // Note that the end marker is the first occurence of two consecutive
+    // square brackets. So in this case the final square bracket is considered
+    // outside of the "box".
+    assert_that('[[--->]]]').is_not_a_valid(box)
+  }
+  // --------------------------------------------------------------------------
 
   // ## Mapping values
   //
@@ -611,6 +721,7 @@ define([], function () {
   return {
     Stream: Stream,
     from_string: from_string,
+    from_list: from_list,
     
     NO_MATCH: NO_MATCH,
     NO_VALUE: NO_VALUE,
@@ -624,6 +735,7 @@ define([], function () {
     at_end: at_end,
     to_be_defined: to_be_defined,
     skip_to: skip_to,
+    enclosed: enclosed,
     
     constant_value: constant_value,
     joined_value: joined_value,
