@@ -319,6 +319,28 @@ define([], function () {
   }
   // --------------------------------------------------------------------------
   
+  // ### Parsing literals
+  //
+  // You can probably guess that matching literals will be a common thing to
+  // want to do. We will definitely be doing plenty of that in our tests. So
+  // let's make a dedicated function to specify these.
+  function literal(expected) {
+    return is(actual => actual == expected)
+  }
+
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    assert_that('a').is_a_valid(literal('a')).with_value(equal_to('a'))
+    // Let's try a whole bunch !
+    'abcdefghijklmnopqrstuvwxyz01234567898?!'.split('').forEach(c => {
+      assert_that(c).is_a_valid(literal(c)).with_value(equal_to(c))
+    })
+    
+  }
+  // --------------------------------------------------------------------------
+
   // ### Parsing anything and nothing
   //
   // As simple as matching a single character is matching anything and nothing.
@@ -369,7 +391,7 @@ define([], function () {
   // **Test**
   //
   {
-    let starting_with_a = sequence(is(a => a == 'a').as(a => 'A'), any)
+    let starting_with_a = sequence(literal('a').as(a => 'A'), any)
     assert_that('ab').is_a_valid(starting_with_a).with_value(equal_to(['A', 'b']))
     assert_that('a1').is_a_valid(starting_with_a).with_value(equal_to(['A', '1']))
     assert_that('ba').is_not_a_valid(starting_with_a)
@@ -403,7 +425,7 @@ define([], function () {
   // **Test**
   //
   {
-    let repeating_letter_a = many(is(a => a == 'a'))
+    let repeating_letter_a = many(literal('a'))
     assert_that('a'  ).is_a_valid(repeating_letter_a).with_value(equal_to(['a']))
     assert_that('aaa').is_a_valid(repeating_letter_a).with_value(equal_to(['a', 'a', 'a']))
     
@@ -440,7 +462,7 @@ define([], function () {
   // **Test**
   //
   {
-    let a_or_b = choice(is(a => a == 'a'), is(b => b == 'b'))
+    let a_or_b = choice(literal('a'), literal('b'))
     assert_that('a').is_a_valid(a_or_b).with_value(equal_to('a'))
     assert_that('b').is_a_valid(a_or_b).with_value(equal_to('b'))
     assert_that('c').is_not_a_valid(a_or_b)
@@ -464,7 +486,7 @@ define([], function () {
   // **Test**
   //
   {
-    let maybe_a = optional(is(a => a == 'a'))
+    let maybe_a = optional(literal('a'))
     assert_that('a').is_a_valid(maybe_a).with_value(equal_to('a'))
     assert_that('' ).is_a_valid(maybe_a).with_value(equal_to(NO_VALUE))
     assert_that('b').is_not_a_valid(maybe_a)
@@ -486,7 +508,7 @@ define([], function () {
   // **Test**
   //
   {
-    let letter_e = is(e => e == 'e')
+    let letter_e = literal('e')
     let final_e = sequence(letter_e, at_end)
    
     assert_that('e'    ).matches(letter_e).with_value(equal_to('e'))
@@ -534,8 +556,8 @@ define([], function () {
   // So, now that we can, let's define a parser for nested parentheses.
   {
     let parens = to_be_defined()
-    let open   = is(c => c == '(')
-    let close  = is(c => c == ')')
+    let open   = literal('(')
+    let close  = literal(')')
     parens.define(sequence(open, many(parens), close))
     
     assert_that('('     ).is_a_valid(open)
@@ -584,7 +606,7 @@ define([], function () {
   // **Test**
   //
   {
-    let is_a = is(a => a == 'a')
+    let is_a = literal('a')
     let skip_to_a = sequence(skip_to(is_a), is_a)
 
     assert_that('a'    ).is_a_valid(skip_to_a).with_value(equal_to('a'))
@@ -653,8 +675,8 @@ define([], function () {
   // **Test**
   //
   {
-    let open  = sequence(is(c => c == '['), is(c => c == '['))
-    let close = sequence(is(c => c == ']'), is(c => c == ']'))
+    let open  = sequence(literal('['), literal('['))
+    let close = sequence(literal(']'), literal(']'))
     let inner = many(any)
     let box = enclosed(open, inner, close)
     
@@ -726,6 +748,7 @@ define([], function () {
     NO_MATCH: NO_MATCH,
     NO_VALUE: NO_VALUE,
     is: is,
+    literal: literal,
     any: any,
     none: none,
     sequence: sequence,
