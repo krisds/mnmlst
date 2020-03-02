@@ -524,6 +524,34 @@ define([], function () {
   }
   // --------------------------------------------------------------------------
 
+  // ### Negation
+  //
+  // There are times when you don't want to match a specific thing. For that we
+  // can define a parser combinator which negates another one.
+  function not(parser) {
+    return as_fluent_parser(stream => {
+      let [next, value] = parser(stream)
+      // This parser matches when the given one doesn't. Note though, that we
+      // do not consume anything in the stream, returning it as it was.
+      if (next == NO_MATCH) return [stream, NO_VALUE]
+      else return [NO_MATCH, NO_VALUE]
+    })
+  }
+
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    let letter_e = literal('e')
+    let no_e = many(sequence(not(letter_e), any))
+   
+    assert_that('aardvark').is_a_valid(no_e).with_value(equal_to('aardvark'.split('')))
+    assert_that('zebra').is_not_a_valid(no_e)
+  }
+  
+  
+  // --------------------------------------------------------------------------
+
   // ### Recursive parsing
   //
   // So far the parsers we have defined were either stand-alone (e.g. `is`,
@@ -761,6 +789,7 @@ define([], function () {
     choice: choice,
     optional: optional,
     at_end: at_end,
+    not: not,
     to_be_defined: to_be_defined,
     skip_to: skip_to,
     enclosed: enclosed,
