@@ -189,31 +189,36 @@ define([], function () {
   //
   // We'll be testing lots of parsers against lots of inputs. We'll spend some
   // time here to make that more pleasant. Starting with a means of setting up
-  // quick assertions of input strings versus parsers.
+  // quick assertions of inputs versus parsers.
   function assert_that(input) {
+    // We'll allow strings to be passed in directly, and handle creating the
+    // stream for it ourselves.
+    if (typeof input === 'string' || input instanceof String)
+      input = new Stream(from_string(input))
+    
     return {
       // This version is for the simplest assertion: that the given parser
       // should return a match on the input.
       matches: parser => {
-        let [stream, value] = parser(new Stream(from_string(input)))
+        let [stream, value] = parser(input)
         assert(stream != NO_MATCH)
         return { with_value: (f) => f(value) }
       },
       // This assertion is stronger: the given parser should match **all** of
       // the input.
       is_a_valid: parser => {
-        let [stream, value] = parser(new Stream(from_string(input)))
+        let [stream, value] = parser(input)
         assert(stream != NO_MATCH && stream.head() == null)
         return { with_value: (f) => f(value) }
       },
       // This asserts the inverse: that a given parser will not match.
       does_not_match: parser => {
-        let [stream, value] = parser(new Stream(from_string(input)))
+        let [stream, value] = parser(input)
         assert(stream == NO_MATCH)
       },
       // And again a stronger version which disallows partial matches.
       is_not_a_valid: parser => {
-        let [stream, value] = parser(new Stream(from_string(input)))
+        let [stream, value] = parser(input)
         assert(stream == NO_MATCH || stream.head() != null)
       }
     }
