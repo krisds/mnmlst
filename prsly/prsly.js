@@ -736,6 +736,36 @@ define([], function () {
   }
   // --------------------------------------------------------------------------
 
+  // ### Empty parse
+  //
+  // The enclosed parser combinator asks us to specify three different parts:
+  // an opening, a closing, and what should be found in between. At times we
+  // may want to leave one of these open. Maybe we don't care about the
+  // opening, for instance.
+  //
+  // Now, we could make the enclosed PC smarter. But we can also define a
+  // parser which always matches nothing. This is the empty parser:
+  function empty(stream) {
+    return [stream, NO_VALUE]
+  }
+
+  // --------------------------------------------------------------------------
+  // **Test**
+  //
+  {
+    let close = literal('!')
+    let inner = many(any)
+    let exclamation = enclosed(empty, inner, close)
+    
+    assert_that('Hello world !')
+      .is_a_valid(exclamation)
+      .with_value(equal_to(['Hello world '.split(''), ['!']]))
+    
+    assert_that('Would you like to play a game ?').is_not_a_valid(exclamation)
+  }
+
+  // --------------------------------------------------------------------------
+
   // ## Mapping values
   //
   // At this point we have all the pieces to construct useful parsers, and we
@@ -793,6 +823,7 @@ define([], function () {
     to_be_defined: to_be_defined,
     skip_to: skip_to,
     enclosed: enclosed,
+    empty: empty,
     
     constant_value: constant_value,
     joined_value: joined_value,
