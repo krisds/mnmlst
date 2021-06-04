@@ -30,34 +30,34 @@ define([], function () {
   // changes we need to construct a dataflow graph. Each node in this graph
   // will hold a value (or a way of calculating that value). Each edge links
   // a value to other values which depend on it.
-  
+
   class Node {
-    
+
     // A node mainly consists of two things: the current value of the node, and
     // an optional function for calculating that value. It will be up to the
     // engine to trigger this calculation as needed.
     constructor(value_or_calculation) {
       this.current_value = null
       this.calculation = null
-      
+
       // Each node will need a way to track the nodes which depend on it;
       // which nodes are "downstream" from it.
       this.downstream_nodes = new Set()
-      
+
       // Upon recalculation the set of edges may change, and some existing
       // edges may no longer be needed. In order to be able to clean these up
       // we also track the nodes which were used in the calculation; the nodes
       // "upstream" from this one.
       this.upstream_nodes = new Set()
-      
+
       // We check the argument to see whether or not it is a function, and set
       // the node's state accordingly. If it is a function we schedule this
       // node for (re-)calculation.
       if (typeof value_or_calculation === 'function') {
         this.calculation = value_or_calculation
         schedule_one_for_recalculation(this)
-  
-      } else 
+
+      } else
         this.current_value = value_or_calculation
     }
 
@@ -84,7 +84,7 @@ define([], function () {
         this.downstream_nodes.add(node_being_recalculated)
         node_being_recalculated.upstream_nodes.add(this)
       }
-    
+
       return this.current_value
     }
 
@@ -93,12 +93,12 @@ define([], function () {
     // for recalculation.
     becomes(new_value) {
       if (new_value == this.current_value) return
-    
+
       this.current_value = new_value
       schedule_all_for_recalculation(this.downstream_nodes)
     }
   }
-  
+
 
   // ## The Engine
   //
@@ -111,14 +111,14 @@ define([], function () {
   // track of that node so we can use it to link up the dataflow graph (as done
   // in the Node class).
   let node_being_recalculated = null
-    
+
 
   // The scheduling function then. We make use of the Javascript runtime to
   // invoke our engine as soon as possible.
   function schedule_engine() {
     if (!node_being_recalculated) setImmediate(run_engine)
   }
-    
+
   // The above gets wrapped in two utility functions which can request
   // recalculation of one or more nodes. They add any given nodes to the queue,
   // but try to avoid duplicates.
@@ -131,7 +131,7 @@ define([], function () {
 
   function schedule_all_for_recalculation(nodes) {
     if (!nodes || nodes.size == 0) return
-    
+
     for (let node of nodes)
       if (nodes_to_be_recalculated.indexOf(node) < 0)
         nodes_to_be_recalculated.push(node)
@@ -145,27 +145,49 @@ define([], function () {
   function run_engine() {
     while (nodes_to_be_recalculated.length > 0) {
       node_being_recalculated = nodes_to_be_recalculated.shift()
-      
+
       // TODO Allow a node to enable/disable this behaviour ?
       for (let node of node_being_recalculated.upstream_nodes)
         node.downstream_nodes.delete(this)
       node_being_recalculated.upstream_nodes.clear()
-      
+
       let value_changed = node_being_recalculated.recalculate()
-      
+
       if (value_changed)
         for (let node of node_being_recalculated.downstream_nodes)
           if (nodes_to_be_recalculated.indexOf(node) < 0)
             nodes_to_be_recalculated.push(node)
-      
+
       node_being_recalculated = null
     }
   }
 
   // ## Public API
   //
+  // OK, so I'm taking some liberties here in order to make code using this
+  // dataflow engine more readable (in my personal opinion).
 
   return {
-    is: (value_or_fn) => new Node(value_or_fn)
+    // This is the most basic way of interacting with the engine: it let's you
+    // define a new node:
+    is: (value_or_fn) => new Node(value_or_fn),
+    // So we could now write `this.name = dfntly.is('Once-ler')`. And then we
+    // could use `.value()` and `becomes(new_value)` to interact with that node.
+    // And that's fine, but we can do better.
+
+    // Javascript has support for getters and setters which will let you use
+    // plain old assignment, but route it through some custom methods. So rather
+    // than having to write `this.name.becomes('Lorax')` we could write
+    // `this.name = Lorax`. So that's what we do here:
+    define: (scope, name, value_or_fn) => {
+      const node = new Node(value_or_fn)
+      Object.defineProperty(scope, name, {
+        get() { return node.value() },
+        set(value) { node.becomes(value) }
+      });
+    },
   }
+
+  // And that's our basic dataflow engine established. Now head over to the
+  // examples to see it in action !
 })
