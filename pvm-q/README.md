@@ -6,4 +6,4 @@ This version has support for asynchronous tasks, which are being handled with th
 
 Built for [Node.js](http://nodejs.org/). You'll also need [requirejs](http://requirejs.org/docs/node.html) and [Q](https://github.com/kriskowal/q) to run.
 
-To run the examples you'll need to install [Restify](https://github.com/mcavage/node-restify) as well.
+To run the examples you'll need to install [Restify](https://github.com/restify/node-restify) and [restify-clients](https://github.com/restify/clients) as well.

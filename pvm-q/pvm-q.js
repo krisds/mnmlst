@@ -114,8 +114,8 @@ define(['q'], function (Q) {
   // comes into the picture. Q allows us to compose an asynchronous task with
   // the above recursion. As we'll see now...
   function tick() {
-	if (processes.length == 0) return
-	
+    if (processes.length == 0) return
+    
     // We fetch the first process and task from the queue.
     var p = processes.shift()
     var task = p.task
@@ -154,7 +154,9 @@ define(['q'], function (Q) {
           // One nice thing of Q's promises (and deferreds) is that we can
           // notify the client of progress. So as kind of service to the client
           // we notify him of the result of each transition.
-	      p.deferred.notify(p.task.id)
+          p.deferred.notify(p.task.id)
+          
+          // We've handled the transition, and that's all we needed to do.
           return
         }
       }
