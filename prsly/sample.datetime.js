@@ -20,7 +20,7 @@ requirejs(['prsly'], function(_) {
   }
 
   // Based on that we can describe what a digit is:
-  var digit = r('0', '9')
+  const digit = r('0', '9')
 
   // One extremely useful side effect of the parser combinator approach is that
   // we can easily unit test these individual building blocks. This can make
@@ -37,7 +37,7 @@ requirejs(['prsly'], function(_) {
   })
 
   // Next, we'll define whitespace as a sequence of one or more spaces.
-  var whitespace = _.sequence(c(' '), _.many(c(' '))).as(_.ignored_value)
+  const whitespace = _.sequence(c(' '), _.many(c(' '))).as(_.ignored_value)
   
   _.assert_that(' '      ).is_a_valid(whitespace)
   _.assert_that('    '   ).is_a_valid(whitespace)
@@ -58,7 +58,7 @@ requirejs(['prsly'], function(_) {
 
   // We'll use that to define a parser which accepts all names of the months
   // and returns their ordinal value.
-  var month = _.choice(
+  const month = _.choice(
     l('January'  ).as(_.constant_value( 1)), 
     l('February' ).as(_.constant_value( 2)), 
     l('March'    ).as(_.constant_value( 3)), 
@@ -78,14 +78,14 @@ requirejs(['prsly'], function(_) {
   _.assert_that('Octember').is_not_a_valid(month)
 
   // A day is one to two digits long.
-  var day = _.sequence(digit, _.optional(digit)).as(_.int_value)
+  const day = _.sequence(digit, _.optional(digit)).as(_.int_value)
 
   // A year is four digits.
-  var year = _.sequence(digit, digit, digit, digit).as(_.int_value)
+  const year = _.sequence(digit, digit, digit, digit).as(_.int_value)
 
   // A date is a sequence of month, day and year, with some separators.    
-  let comma = c(',').as(_.ignored_value)
-  var date = _.sequence(month, whitespace, day, comma, whitespace, year).as(
+  const comma = c(',').as(_.ignored_value)
+  const date = _.sequence(month, whitespace, day, comma, whitespace, year).as(
     ([month, day, year]) => { return {
       day: day,
       month: month,
@@ -102,13 +102,13 @@ requirejs(['prsly'], function(_) {
   _.assert_that('12-12-2012'     ).is_not_a_valid(date)
 
   // Hours, minutes and seconds consist of two digits each:
-  var hour    = _.sequence(digit, digit).as(_.int_value)
-  var minutes = _.sequence(digit, digit).as(_.int_value)
-  var seconds = _.sequence(digit, digit).as(_.int_value)
+  const hour    = _.sequence(digit, digit).as(_.int_value)
+  const minutes = _.sequence(digit, digit).as(_.int_value)
+  const seconds = _.sequence(digit, digit).as(_.int_value)
 
   // Hours, minutes and seconds are separated by colons. Seconds are optional.
-  let colon = c(':').as(_.ignored_value)
-  var time = _.sequence(
+  const colon = c(':').as(_.ignored_value)
+  const time = _.sequence(
     hour, colon, minutes, _.optional(_.sequence(colon, seconds).as(_.first_value))
   ).as(
     ([hours, minutes, seconds]) => { return {
@@ -127,7 +127,7 @@ requirejs(['prsly'], function(_) {
   _.assert_that('12h12'   ).is_not_a_valid(time)
 
   // And finally we compose dates and times into the full datetime notation:
-  var date_time = _.sequence(date, whitespace, time)
+  const date_time = _.sequence(date, whitespace, time)
 
   // Now for the real test: let's give our parser a datetime, make sure it
   // accepts it, and display the value being returned.
